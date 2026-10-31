@@ -51,6 +51,22 @@ INTERESTING_KEYWORDS = (
     "v1", "v2", "v3", "user", "account", "payment", "export", "download",
 )
 
+# Well-known third-party library files are public code with nothing app-specific
+# in them, so they are skipped by default (use --include-vendor to scan them).
+VENDOR_FILENAME_RE = re.compile(
+    r"^(?:jquery(?:[-.](?:ui|migrate|slim|mobile|cookie))?|underscore|lodash|"
+    r"bootstrap(?:\.bundle)?|popper|moment|axios|backbone|angular|react|react-dom|"
+    r"vue|d3|gsap|swiper|slick|modernizr|polyfill|core-js|handlebars|mustache|"
+    r"select2|datatables)"
+    r"(?:[-.]?v?\d+(?:\.\d+)*)?(?:[-.](?:min|slim|umd|esm|bundle|production|development))*\.js$"
+)
+# Directory names / paths that normally hold third-party or CMS core code
+VENDOR_PATH_HINTS = (
+    "/vendor/", "/node_modules/", "/bower_components/", "/libs/",
+    "/wp-includes/", "/core/misc/", "/core/assets/",  # WordPress / Drupal core
+    "_incapsula_resource",  # Imperva WAF script
+)
+
 SECRET_PATTERNS: dict[str, re.Pattern[str]] = {
     "AWS Access Key ID": re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
     "Google API Key": re.compile(r"\bAIza[0-9A-Za-z\-_]{35}\b"),
@@ -101,6 +117,7 @@ PARAM_CATEGORIES: dict[str, set[str]] = {
 class ScanResult:
     target: str
     js_files: list[str] = field(default_factory=list)
+    skipped_vendor: list[str] = field(default_factory=list)
     endpoints: dict[str, set[str]] = field(default_factory=dict)
     secrets: list[dict[str, str]] = field(default_factory=list)
     params: dict[str, set[str]] = field(default_factory=dict)
@@ -109,6 +126,7 @@ class ScanResult:
         return {
             "target": self.target,
             "js_files": self.js_files,
+            "skipped_vendor": self.skipped_vendor,
             "endpoints": {k: sorted(v) for k, v in sorted(self.endpoints.items())},
             "secrets": [
                 {**s, "value": s["value"] if reveal_secrets else mask(s["value"])}
@@ -170,6 +188,15 @@ def extract_js_urls(html: str, base_url: str, include_external: bool) -> list[st
     return result
 
 
+def is_vendor(url: str) -> bool:
+    """True for well-known library files (jQuery, lodash, ...) and vendor/core paths."""
+    path = urlparse(url).path.lower()
+    filename = path.rsplit("/", 1)[-1]
+    if VENDOR_FILENAME_RE.match(filename):
+        return True
+    return any(hint in path for hint in VENDOR_PATH_HINTS)
+
+
 def is_static_asset(path: str) -> bool:
     return urlparse(path).path.lower().endswith(STATIC_EXTENSIONS)
 
@@ -221,7 +248,8 @@ def print_report(result: ScanResult, reveal_secrets: bool, show_all: bool) -> No
     console.print(
         Panel.fit(
             f"[bold]Target:[/bold] {result.target}\n"
-            f"[bold]JS files:[/bold] {len(result.js_files)}   "
+            f"[bold]JS files:[/bold] {len(result.js_files)} "
+            f"([dim]{len(result.skipped_vendor)} library files skipped[/dim])   "
             f"[bold]Endpoints:[/bold] {len(result.endpoints)}   "
             f"[bold]Secrets:[/bold] {len(result.secrets)}   "
             f"[bold]Params:[/bold] {len(result.params)}",
@@ -291,6 +319,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--user-agent", default=DEFAULT_UA, help="Custom User-Agent")
     parser.add_argument("--external", action="store_true", help="Also scan JS hosted on other domains (CDNs)")
     parser.add_argument("--max-js", type=int, default=50, help="Maximum JS files to scan (default: 50)")
+    parser.add_argument("--include-vendor", action="store_true",
+                        help="Also scan well-known library files such as jQuery (skipped by default)")
     parser.add_argument("--insecure", action="store_true", help="Do not verify TLS certificates")
     parser.add_argument("--show-secrets", action="store_true", help="Show full secret values (default: masked)")
     parser.add_argument("--all", action="store_true", help="Show all endpoints, not just interesting ones")
@@ -327,9 +357,16 @@ def main() -> int:
     result = ScanResult(target=target)
     scan_text(html, "(main page)", result)
 
-    js_urls = extract_js_urls(html, target, args.external)[: args.max_js]
+    js_urls = extract_js_urls(html, target, args.external)
+    if not args.include_vendor:
+        result.skipped_vendor = [u for u in js_urls if is_vendor(u)]
+        js_urls = [u for u in js_urls if not is_vendor(u)]
+    js_urls = js_urls[: args.max_js]  # the limit counts only files we will really scan
     result.js_files = js_urls
-    console.print(f"[cyan][*][/cyan] Found {len(js_urls)} JavaScript file(s)")
+    console.print(
+        f"[cyan][*][/cyan] Found {len(js_urls)} JavaScript file(s) to scan"
+        + (f", skipped {len(result.skipped_vendor)} library file(s)" if result.skipped_vendor else "")
+    )
 
     for js_url in js_urls:
         console.print(f"[dim]    scanning {js_url}[/dim]")
