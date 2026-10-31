@@ -20,7 +20,7 @@ The tool only performs normal `GET` requests. Secrets are **masked by default** 
 ## Installation
 
 ```bash
-git clone https://github.com/<your-username>/JS-LeakHunter.git
+git clone https://github.com/kainn0x4/JS-LeakHunter.git
 cd JS-LeakHunter
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
