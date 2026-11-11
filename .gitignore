@@ -6,3 +6,4 @@ venv/
 .vscode/
 results*.json
 out.json
+.pytest_cache/
