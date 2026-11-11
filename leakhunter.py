@@ -86,8 +86,9 @@ VENDOR_FILENAME_RE = re.compile(
     r"^(?:jquery(?:[-.](?:ui|migrate|slim|mobile|cookie))?|underscore|lodash|"
     r"bootstrap(?:\.bundle)?|popper|moment|axios|backbone|angular|react|react-dom|"
     r"vue|d3|gsap|swiper|slick|modernizr|polyfill|core-js|handlebars|mustache|"
-    r"select2|datatables)"
-    r"(?:[-.]?v?\d+(?:\.\d+)*)?(?:[-.](?:min|slim|umd|esm|bundle|production|development))*\.js$"
+    r"select2|datatables|owl[.\-]carousel|wow|sweetalert2?|aos|isotope|fancybox|"
+    r"magnific-popup|waypoints|counterup|lightbox)"
+    r"(?:[-.]?v?\d+(?:\.\d+)*)?(?:[-.](?:min|slim|umd|esm|bundle|production|development|all))*\.js$"
 )
 # Directory names / paths that normally hold third-party or CMS core code
 VENDOR_PATH_HINTS = (
@@ -123,6 +124,8 @@ LIBRARY_SIGNATURES: list[tuple[str, re.Pattern[str]]] = [
         ("Handlebars", r"Handlebars"),
         ("Backbone.js", r"Backbone\.js\s+\d"),
         ("Font Awesome", r"Font\s+Awesome"),
+        ("SweetAlert2", r"sweetalert2\s+v?\d"),
+        ("WOW.js", r"WOW\s+-\s+v?\d|wow\.js"),
     ]
 ]
 
@@ -270,7 +273,7 @@ def fetch(
             has_charset = "charset" in resp.headers.get("Content-Type", "").lower()
             encoding = (resp.encoding if has_charset else None) or "utf-8"
     except requests.RequestException as exc:
-        console.print(f"[red][-][/red] {shown} -> {exc.__class__.__name__}")
+        console.print(f"[red][-][/red] {shown} -> {exc.__class__.__name__}: {escape(str(exc))[:200]}")
         return None
 
     data = b"".join(chunks)

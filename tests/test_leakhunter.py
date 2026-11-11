@@ -291,3 +291,9 @@ def test_fetch_rejects_declared_and_actual_oversize_and_non_200():
     liar = FakeResponse(b"x" * 500)  # no Content-Length header, body too large
     assert lh.fetch(FakeSession(liar), "https://t.example/a.js", 5, True, max_bytes=100) is None
     assert lh.fetch(FakeSession(FakeResponse(b"", status=404)), "https://t.example/a.js", 5, True) is None
+
+
+def test_more_vendor_filenames_are_skipped():
+    for name in ("owl.carousel.min.js", "wow.min.js", "sweetalert2.all.min.js"):
+        assert lh.is_vendor(f"https://t.example/assets/js/{name}")
+    assert not lh.is_vendor("https://t.example/assets/js/custom.js")
